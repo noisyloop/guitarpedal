@@ -1113,6 +1113,8 @@ static struct sysex_in {
 	uint8_t buf[SYSEX_BUF_MAX];
 	int len;
 	bool in;			// between F0 and F7
+	bool id;			// the 7D that makes it ours has been seen
+	bool foreign;			// somebody else's manufacturer id: ignore
 	bool over;			// longer than buf: drop it
 	uint32_t used;
 } sysex_in[SYSEX_SOURCES];
@@ -1145,7 +1147,7 @@ static struct sysex_in *sysex_slot(struct midi_dest from)
 	}
 	pick->from = from;
 	pick->len = 0;
-	pick->in = pick->over = false;
+	pick->in = pick->id = pick->foreign = pick->over = false;
 	pick->used = ++sysex_clock;
 	return pick;
 }
@@ -1492,7 +1494,7 @@ static bool handle_midi_packet_as(const uint8_t packet[4])
 			if (b == 0xF0) {
 				in->in = true;
 				in->len = 0;
-				in->over = false;
+				in->id = in->foreign = in->over = false;
 			} else if (b == 0xF7 && in->in) {
 				in->in = false;
 				//
@@ -1509,13 +1511,25 @@ static bool handle_midi_packet_as(const uint8_t packet[4])
 				// half the pots in a batch would be set and the
 				// other half silently ignored.
 				//
+				// Somebody else's SysEx is not ours to act on
+				// either, and neither is one with no command in
+				// it.  Manufacturer ids 01 and 05 are real ones,
+				// and read as a command they would be a schema
+				// request and a state dump.
+				//
 				if (in->over)
 					report_info("MIDI message too long, dropped");
-				else
+				else if (in->id && in->len > 0)
 					handle_sysex_payload(in->buf, in->len);
 			} else if (in->in) {
-				if (in->len == 0 && b == 0x7D) {
-					// Consume header 7D
+				if (!in->id && !in->foreign) {
+					// The first byte says whose this is
+					if (b == 0x7D)
+						in->id = true;
+					else
+						in->foreign = true;
+				} else if (in->foreign) {
+					// Not ours: not worth buffering
 				} else if (in->len < SYSEX_BUF_MAX) {
 					in->buf[in->len++] = b;
 				} else {
@@ -1526,6 +1540,22 @@ static bool handle_midi_packet_as(const uint8_t packet[4])
 			if (code == 0x06 && i == 2) break;
 		}
 		return true;
+	}
+
+	//
+	// A channel or system message in the middle of a SysEx abandons it,
+	// as the MIDI spec has it; real-time (CIN F) may come at any point
+	// and does not.  Without this the half-message waits for whichever F7
+	// comes next, from whatever it was that sent it.
+	//
+	if (code >= 0x2 && code != 0xF) {
+		for (int i = 0; i < SYSEX_SOURCES; i++) {
+			struct sysex_in *in = &sysex_in[i];
+
+			if (in->used && in->from.to == midi_from.to &&
+			    in->from.peer == midi_from.peer)
+				in->in = false;
+		}
 	}
 
 	uint8_t status = packet[1];

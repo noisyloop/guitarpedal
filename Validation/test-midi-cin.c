@@ -69,6 +69,39 @@ int main(void)
 	chk("reserved 0", midi_cin_length(0x0), 0);
 	chk("reserved 1", midi_cin_length(0x1), 0);
 
+	// A status byte inside a SysEx abandons it: the next F7 must not
+	// complete a message the abort cut short, and the status itself is
+	// parsed as what it is.
+	{
+		struct midi_parser p = { .want_sysex = true };
+		uint8_t pk[4];
+		const uint8_t abort_ch[] = { 0xF0, 0x7D, 0x03, 0x90, 0x40, 0x7F };
+		bool got = false;
+
+		for (unsigned i = 0; i < sizeof(abort_ch); i++)
+			if (midi_parse_byte(&p, abort_ch[i], pk))
+				got = true;
+		chk("abort: note on emitted", got && pk[0] == 0x9 && pk[1] == 0x90, 1);
+		chk("abort: sysex over", p.in_sysex, 0);
+
+		// ...and the F7 that follows is a stray, not an end
+		chk("abort: stray F7 ignored", midi_parse_byte(&p, 0xF7, pk), 0);
+
+		// A new F0 right after an abort starts a fresh message
+		chk("abort: F0 restarts", midi_parse_byte(&p, 0xF0, pk), 0);
+		chk("abort: restarted in sysex", p.in_sysex, 1);
+		midi_parse_byte(&p, 0x7D, pk);
+		midi_parse_byte(&p, 0x0A, pk);
+		chk("abort: F7 completes", midi_parse_byte(&p, 0xF7, pk), 1);
+		chk("abort: end cin", pk[0], 0x5);
+
+		// Real-time bytes do not abort
+		p = (struct midi_parser){ .want_sysex = true };
+		midi_parse_byte(&p, 0xF0, pk);
+		midi_parse_byte(&p, 0xF8, pk);
+		chk("realtime keeps sysex", p.in_sysex, 1);
+	}
+
 	printf(fails ? "%d failures\n" : "all CIN checks pass\n", fails);
 	return !!fails;
 }

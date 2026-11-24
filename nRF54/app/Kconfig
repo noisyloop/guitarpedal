@@ -1,0 +1,17 @@
+# The radio application's own options.
+
+mainmenu "Pedal radio"
+
+config PEDAL_MIDI_BONDED_ONLY
+	bool "Ignore MIDI from anyone who is not a bonded host"
+	depends on BT
+	help
+	  By default anybody may write to the MIDI characteristic, so that a
+	  footswitch can play the pedal without pairing, and the pedal takes
+	  only channel messages from one that is not bonded.  That still lets
+	  anybody in range bypass the pedal, change the volume or switch
+	  scene.  Say y to drop everything from a peer that has no bond made
+	  with Secure Connections through the pairing window.  Unbonded
+	  footswitches then stop working.
+
+source "Kconfig.zephyr"

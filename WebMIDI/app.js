@@ -3133,7 +3133,7 @@ function clearPedalStatus() {
 //
 function updateSceneLabels() {
     const sel = document.getElementById('global-scene-select');
-    const scene = sel ? sel.value : '0';
+    const scene = sel ? (Number(sel.value) | 0) : 0;
     const saveBtn = document.getElementById('global-save-scene-btn');
     const loadBtn = document.getElementById('global-load-scene-btn');
     if (saveBtn) saveBtn.innerHTML = `💾&nbsp;&nbsp;Save to Scene ${scene}`;
@@ -4466,6 +4466,16 @@ function potInfoLine(potDiv, label, pot) {
     return line;
 }
 
+// A span whose text is exactly what it is given.  Names come from the
+// pedal's schema, and that is whoever answered the connection - so they go
+// in as text, never as markup.
+function titleSpan(cls, text) {
+    const span = document.createElement('span');
+    span.className = cls;
+    span.textContent = text;
+    return span;
+}
+
 function renderUI() {
     //
     // Whatever is open belongs to the cards about to be thrown away, so
@@ -4509,9 +4519,9 @@ function renderUI() {
         // An anchor is not in the chain and a pinned effect cannot be
         // moved within it, so neither gets a handle or a drag
         if (!isAnchorEffect(idx) && !pinnedEnd(effect)) {
-            title.innerHTML = `<span class="drag-handle">≡</span>
-                               <span class="collapse-chevron">▼</span>
-                               <span class="effect-name">${effect.name}</span>`;
+            title.appendChild(titleSpan('drag-handle', '≡'));
+            title.appendChild(titleSpan('collapse-chevron', '▼'));
+            title.appendChild(titleSpan('effect-name', effect.name));
 
             // A drag starts on the header and nowhere else, so there is
             // never any question of whether you meant the card or the
@@ -4528,8 +4538,8 @@ function renderUI() {
             header.addEventListener('pointerdown',
                                     (e) => cardSwipeStart(card, e));
         } else {
-            title.innerHTML = `<span class="collapse-chevron">▼</span>
-                               <span class="effect-name">${effect.name}</span>`;
+            title.appendChild(titleSpan('collapse-chevron', '▼'));
+            title.appendChild(titleSpan('effect-name', effect.name));
         }
 
         //

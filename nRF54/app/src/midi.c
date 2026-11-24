@@ -1174,6 +1174,21 @@ static ssize_t midi_write(struct bt_conn *conn, const struct bt_gatt_attr *attr,
 			  uint8_t flags)
 {
 	out.writes++;
+
+#ifdef CONFIG_PEDAL_MIDI_BONDED_ONLY
+	/*
+	 * Writing is open by default so that a footswitch can play the pedal
+	 * without pairing, and the pedal then takes only channel messages
+	 * from it.  This turns that off: whoever is not a bonded host is
+	 * not heard at all, so nobody in range can bypass, mute or change
+	 * the scene of a pedal they have not been introduced to.  The write
+	 * is acknowledged all the same - refusing it would only tell a
+	 * stranger which pedals are listening.
+	 */
+	if (!peer_trusted(conn))
+		return len;
+#endif
+
 	midi_ble_arrived(conn, buf, len);
 	return len;
 }
