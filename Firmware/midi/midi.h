@@ -172,6 +172,21 @@ static inline bool midi_parse_byte(struct midi_parser *p, uint8_t b,
 	// link it arrived on.  CIN 4 is "starts or continues", and 5, 6
 	// and 7 are "ends with this many bytes".
 	//
+	//
+	// Any status byte but F7 ends a SysEx, and not by completing it: the
+	// message so far is abandoned, and the byte is a status like any
+	// other - a channel message, or the F0 of the next SysEx.  Taking it
+	// for data would splice whatever followed onto the half-message, and
+	// a later F7 would then complete the lot.
+	//
+	// What was already handed on in whole packets is not recalled, so
+	// handle_midi_packet() has the matching rule for its half.
+	//
+	if (p->in_sysex && b >= 0x80 && b != 0xF7) {
+		p->in_sysex = false;
+		p->sx_len = 0;
+	}
+
 	if (p->in_sysex) {
 		p->sx[p->sx_len++] = b;
 

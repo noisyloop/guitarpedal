@@ -465,6 +465,26 @@ const chipNames = () => (pool.classes.has('hidden') ? []
 const cardOf = (effect) =>
       document.getElementById(`effect-${schema.indexOf(effect)}`);
 
+//
+// A card's title carries the effect's name as text.  The name comes from
+// the schema, which is whatever answered the connection, so it must never
+// be parsed as markup: that is a span built with textContent, which this
+// fake DOM can see, where innerHTML would leave nothing to find.
+//
+const walk = (n, f) => { f(n); (n.children || []).forEach((c) => walk(c, f)); };
+const nameSpans = (effect) => {
+    const found = [];
+    walk(cardOf(effect), (n) => {
+        if (n.className === 'effect-name')
+            found.push(n.textContent);
+    });
+    return found;
+};
+check('every card shows its effect name as text',
+      schema.every((e) => nameSpans(e).join() === e.name),
+      schema.filter((e) => nameSpans(e).join() !== e.name)
+            .map((e) => e.name).join());
+
 check('nothing is routed until the pedal says so',
       chipNames().join() === routable.map((e) => e.name).join(),
       chipNames().join());
